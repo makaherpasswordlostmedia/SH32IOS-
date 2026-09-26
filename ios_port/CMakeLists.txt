@@ -38,6 +38,48 @@ add_compile_options(-Wno-error=format-security)
 add_compile_definitions(GLES_SILENCE_DEPRECATION)
 
 # -----------------------------------------------------------------------------
+# 32-bit / armv7 / iOS 9.3 target (original iPad mini, A5 SoC)
+# -----------------------------------------------------------------------------
+# The A5 never runs arm64 and never exposes OpenGL ES 3 — it tops out at ES2.
+# This is a distinct configuration from the normal arm64/ES3 build, not just a
+# different -arch flag: PsyCross has to be told to select its ES2 path, and the
+# bundle metadata has to stop claiming arm64-only. Select it by architecture
+# rather than a separate cache var, since CMAKE_OSX_ARCHITECTURES is already
+# the thing toolchain.cmake sets and there is no reason to track the same fact
+# twice.
+if(CMAKE_OSX_ARCHITECTURES MATCHES "armv7")
+    # CACHE + INTERNAL: pc_port/CMakeLists.txt is pulled in below via
+    # add_subdirectory and needs to see this too (it gates the Metal.framework
+    # link, which doesn't exist in the iOS 9.3 SDK). A plain set() here is
+    # only visible in this directory's scope, not the subdirectory's.
+    set(SH_IOS_LEGACY_ARMV7 TRUE CACHE INTERNAL "iOS 9.3/armv7 legacy target")
+    message(STATUS "ios_port: armv7 target detected — building the ES2/iOS 9.3 configuration")
+
+    # CORRECTION: an earlier version of this file invented a define called
+    # RENDERER_OGLES_LEGACY that does not exist anywhere in PsyCross — that
+    # was written without having seen PsyCross's actual source (it lives in a
+    # git submodule that wasn't checked out at the time) and the claim was
+    # wrong. Confirmed against the real source now: PsyCross's iOS branch in
+    # PsyX_render.h always selects RENDERER_OGLES with OGLES_VERSION 3,
+    # unconditionally, with no existing hook to request ES2. The real,
+    # matching hook — PSYCROSS_OGLES_VERSION_OVERRIDE — was added to
+    # PsyX_render.h alongside this to actually provide one; see that header
+    # for why OGLES_VERSION 2 is what the A5's PowerVR SGX543MP2 needs (no
+    # ES3 driver exists for it at all).
+    add_compile_definitions(PSYCROSS_OGLES_VERSION_OVERRIDE=2)
+
+    # A5 has 512 MB of RAM shared with the OS; the ES3 renderer's texture
+    # streaming budget assumes a device with headroom in the gigabytes.
+    # NOTE: SH_LOW_MEMORY_DEVICE is a hook this project still needs to add
+    # meaning to elsewhere (e.g. in pc_config.c's default texture/streaming
+    # budget) — defining it here only makes the symbol available to code
+    # that checks for it, it does not by itself reduce anything.
+    add_compile_definitions(SH_LOW_MEMORY_DEVICE)
+else()
+    set(SH_IOS_LEGACY_ARMV7 FALSE CACHE INTERNAL "iOS 9.3/armv7 legacy target")
+endif()
+
+# -----------------------------------------------------------------------------
 # SDL2
 # -----------------------------------------------------------------------------
 # Static, unlike Android: an iOS app may only load dynamic libraries that ship
@@ -112,6 +154,14 @@ if(NOT SH_IOS_SDK_VERSION)
 endif()
 set(SH_IOS_SDK_NAME "${SH_IOS_PLATFORM_NAME}${SH_IOS_SDK_VERSION}")
 set(SH_IOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+
+# UIRequiredDeviceCapabilities has to name the arch actually shipped, or
+# installd refuses the bundle before it ever gets to a code-signature check.
+if(SH_IOS_LEGACY_ARMV7)
+    set(SH_IOS_REQUIRED_CAPABILITY "armv7")
+else()
+    set(SH_IOS_REQUIRED_CAPABILITY "arm64")
+endif()
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Resources/Info.plist.in"
                "${CMAKE_CURRENT_BINARY_DIR}/Info.plist" @ONLY)

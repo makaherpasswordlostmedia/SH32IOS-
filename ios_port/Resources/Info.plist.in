@@ -74,13 +74,15 @@
 	     main menu). Without this key UIKit withholds indirect pointer events and
 	     logs "You need UIApplicationSupportsIndirectInputEvents in your
 	     Info.plist for mouse support", so a paired trackpad or mouse does
-	     nothing. Touch is unaffected either way. -->
+	     nothing. Touch is unaffected either way. This key is meaningless
+	     before iOS 13 — harmless on 9.3, since an unrecognised plist key is
+	     just ignored, not rejected. -->
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>arm64</string>
+		<string>@SH_IOS_REQUIRED_CAPABILITY@</string>
 	</array>
 	<key>MinimumOSVersion</key>
 	<string>@SH_IOS_DEPLOYMENT_TARGET@</string>

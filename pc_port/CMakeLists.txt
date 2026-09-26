@@ -725,10 +725,14 @@ elseif(IOS)
             "SDL2main target not found. iOS needs it for UIApplicationMain — "
             "check that ios_port/CMakeLists.txt added the SDL submodule first.")
     endif()
-    # Also GLES (PsyX_render.h selects RENDERER_OGLES on TARGET_OS_IPHONE), but
-    # reached through a framework rather than a library, and with no EGL — SDL
-    # creates the context via EAGL. The rest are what SDL2's UIKit, CoreAudio
-    # and MFi-controller backends pull in.
+    # Also GLES — PsyX_render.h selects RENDERER_OGLES under
+    # `#if defined(__APPLE__) && TARGET_OS_IPHONE`, which this project added
+    # to PsyCross (the umbrella __APPLE__ check there previously didn't
+    # distinguish iOS from macOS and would have routed this platform into
+    # desktop RENDERER_OGL instead, at odds with the -framework OpenGLES
+    # link right below) — reached through a framework rather than a library,
+    # and with no EGL — SDL creates the context via EAGL. The rest are what
+    # SDL2's UIKit, CoreAudio and MFi-controller backends pull in.
     target_link_libraries(SilentHillPC PRIVATE
         "-framework OpenGLES"
         "-framework UIKit"
@@ -739,9 +743,17 @@ elseif(IOS)
         "-framework AudioToolbox"
         "-framework AVFoundation"
         "-framework GameController"
-        "-framework Metal"
         m
     )
+    if(NOT SH_IOS_LEGACY_ARMV7)
+        # Metal.framework does not exist in the iOS 9.3 SDK at all (it shipped
+        # in iOS 8 for A7+ only, and the armv7 A5 never supports it regardless
+        # of SDK) — linking it unconditionally makes `ld` fail to find the
+        # framework outright on the legacy toolchain. Nothing in this port
+        # actually renders through Metal; PsyCross only checks for it as an
+        # optional capability probe on the modern path.
+        target_link_libraries(SilentHillPC PRIVATE "-framework Metal")
+    endif()
 elseif(UNIX)
     find_package(OpenGL REQUIRED)
     target_link_libraries(SilentHillPC PRIVATE OpenGL::GL)

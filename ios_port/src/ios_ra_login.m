@@ -23,11 +23,19 @@
 /* The window to present from. SDL creates its own UIWindow, and on iOS 13+
  * -[UIApplication keyWindow] is deprecated and returns nil under a scene-based
  * lifecycle, so the connected-scenes list is checked first and the deprecated
- * path is only the fallback for the pre-scene case. */
+ * path is only the fallback for the pre-scene case.
+ *
+ * __IPHONE_OS_VERSION_MAX_ALLOWED gates this at COMPILE time, not just
+ * runtime: @available and the UIScene/UIWindowScene types don't exist at all
+ * in SDKs before iOS 11 (Xcode <9), which is what the legacy armv7/iOS 9.3
+ * toolchain (Xcode 7.3.1) ships. On that toolchain there is no scene
+ * lifecycle to fall back from in the first place — keyWindow is simply
+ * correct there, not a fallback. */
 static UIViewController* Ios_RaTopViewController(void)
 {
     UIWindow* keyWindow = nil;
 
+#if defined(__IPHONE_13_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_13_0
     if (@available(iOS 13.0, *))
     {
         for (UIScene* scene in [UIApplication sharedApplication].connectedScenes)
@@ -48,6 +56,7 @@ static UIViewController* Ios_RaTopViewController(void)
                 break;
         }
     }
+#endif
 
     if (!keyWindow)
     {
@@ -89,7 +98,14 @@ int Ios_ShowRetroAchievementsLogin(void)
         field.placeholder             = @"Username";
         field.autocapitalizationType  = UITextAutocapitalizationTypeNone;
         field.autocorrectionType      = UITextAutocorrectionTypeNo;
+#if defined(__IPHONE_10_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
+        /* textContentType (autofill hinting) is iOS 10+; the SDK the legacy
+         * armv7/iOS 9.3 toolchain ships (Xcode 7.3.1) doesn't declare the
+         * property at all, so this has to be compiled out there rather than
+         * merely skipped at runtime -- referencing it would be a build error,
+         * not a no-op, on that SDK. */
         field.textContentType         = UITextContentTypeUsername;
+#endif
         field.returnKeyType           = UIReturnKeyNext;
     }];
 
@@ -98,7 +114,11 @@ int Ios_ShowRetroAchievementsLogin(void)
         field.secureTextEntry        = YES;
         field.autocapitalizationType = UITextAutocapitalizationTypeNone;
         field.autocorrectionType     = UITextAutocorrectionTypeNo;
+#if defined(__IPHONE_11_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_11_0
+        /* UITextContentTypePassword specifically is iOS 11+, one version
+         * later than the Username case above -- Apple added it separately. */
         field.textContentType        = UITextContentTypePassword;
+#endif
         field.returnKeyType          = UIReturnKeyDone;
     }];
 
